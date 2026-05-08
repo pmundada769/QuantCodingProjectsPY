@@ -3,7 +3,7 @@ Options Pricer — Streamlit Dashboard
 Run with:  streamlit run app.py
 """
 
-import streamlit as st
+import streamlit as st # type: ignore
 import numpy as np
 import pandas as pd
 from black_scholes import black_scholes, implied_volatility

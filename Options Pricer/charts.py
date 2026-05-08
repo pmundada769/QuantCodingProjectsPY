@@ -4,8 +4,8 @@ Returns Plotly figures for use in Streamlit.
 """
 
 import numpy as np
-import plotly.graph_objects as go
-import plotly.subplots as sp
+import plotly.graph_objects as go # type: ignore
+import plotly.subplots as sp # type: ignore
 from black_scholes import black_scholes
 
 # ─────────────────────────── Colour palette ───────────────────────────────

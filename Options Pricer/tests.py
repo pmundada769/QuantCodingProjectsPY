@@ -4,7 +4,7 @@ Run with:  python -m pytest tests.py -v
 """
 
 import numpy as np
-import pytest
+import pytest # type: ignore
 from black_scholes import black_scholes, implied_volatility
 
 
