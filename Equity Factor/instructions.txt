@@ -1,0 +1,443 @@
+HOW TO RUN IT:
+---------------------------------
+
+[1] Inside VSC, open VSC terminal
+
+[2] In the venv, navigate to the "Equity Factor" folder 
+    (cd equiy_factor after cd Desktop/quant_projects --> source venv/bin/activate)
+
+[3] run "python main.py"
+    
+[4] If it errors about imports, run "python -m main" instead
+    
+[5] You should see Sharpe ratio, Max Drawdown printed in terminal 
+    and a plot of cumulative returns should pop up
+    
+--------------------------
+
+Pranshu Mundada
+(Assistance from OpenAI's ChatGPT)
+
+--------------------------
+
+Performance Metrics Explanation:
+
+- Sharpe Ratio:
+    Risk-adjusted return: mean(strategy_returns) / std(strategy_returns)
+    Annualized with sqrt(12) for monthly returns.
+    Higher = better risk-adjusted performance.
+
+- Max Drawdown:
+    Largest peak-to-trough decline in portfolio value.
+    Lower (more negative) = worse maximum loss.
+
+- Bull/Bear Sharpe:
+    Sharpe ratio calculated separately during bullish or bearish regimes.
+
+- Volatility Factor:
+    Same computation applied to a factor based on stock volatility.
+
+- Average Cross-Sectional Dispersion:
+    Measures how much individual stock returns differ within the portfolio.
+
+- Turnover:
+    Measures how much portfolio weights change month-to-month.
+    High turnover → higher transaction costs.
+
+- Concentration:
+    Measures risk from overweight positions; (weights**2).sum()
+
+
+GPT review:
+Back-tested momentum and volatility factors → your code calculates factor values, ranks deciles, computes long/short returns.
+
+Across a US equity universe → S&P 500 (filtered by market cap) or custom tickers.
+
+Decile portfolios → top/bottom 10% each month.
+
+Return dispersion → calculated monthly using dispersion = next_month_returns.std().
+
+Drawdowns → max_drawdown() computes worst cumulative loss.
+
+Regime sensitivity → market_regime_filter() separates bull vs bear months.
+
+Risk-adjusted performance → Sharpe ratio computation.
+
+Structural weaknesses → turnover and concentration functions measure trading activity and portfolio concentration.
+
+Implementation constraints → high turnover warns of practical issues.
+
+
+
+GPT Output to TEST:
+Good. Now this is a **real output**. Let’s analyse it properly — like you would in an interview or portfolio report.
+
+---
+
+# 📊 Your Momentum Strategy Results
+
+## 🔹 Overall Sharpe: **1.33**
+
+This is strong.
+
+### How to interpret Sharpe:
+
+| Sharpe    | Meaning     |
+| --------- | ----------- |
+| < 0.5     | Weak        |
+| 0.5 – 1.0 | Decent      |
+| 1.0 – 1.5 | Good        |
+| 1.5 – 2.0 | Very good   |
+| > 2.0     | Exceptional |
+
+So:
+
+> **1.33 = solid institutional-quality factor performance**
+
+Not crazy hedge-fund elite, but absolutely respectable.
+
+---
+
+# 🐂 Bull Sharpe: **1.17**
+
+Good performance during rising markets.
+
+That means:
+
+* Your momentum strategy works in risk-on environments.
+* It captures trend continuation.
+
+Healthy sign.
+
+---
+
+# 🐻 Bear Sharpe: **2.31**
+
+This is very interesting.
+
+This means:
+
+> Your strategy performs EVEN BETTER during market stress.
+
+That’s unusual.
+
+Momentum often struggles in sharp reversals, but if:
+
+* Losers keep falling
+* Winners keep falling less
+
+Long-short momentum can perform well in bear regimes.
+
+This suggests:
+
+✅ Strong cross-sectional separation
+✅ Defensive alpha properties
+⚠️ But possibly concentrated in high-vol names
+
+---
+
+# 📉 Max Drawdown: **-73.9%**
+
+This is the biggest red flag.
+
+This is very large.
+
+For reference:
+
+| Max DD | Interpretation     |
+| ------ | ------------------ |
+| -10%   | Mild               |
+| -20%   | Normal             |
+| -40%   | Aggressive         |
+| -60%+  | Extremely volatile |
+
+-73% means:
+
+> At some point, your strategy lost nearly 3/4 of its value from peak.
+
+Even with Sharpe 1.33, this means:
+
+⚠️ Large tail risk
+⚠️ Likely momentum crash event
+⚠️ Possibly concentrated exposure
+
+Momentum crashes are common (e.g., violent reversals).
+
+This is the classic weakness of momentum.
+
+---
+
+# 🌪 Volatility Factor
+
+### Vol Factor Sharpe: **0.34**
+
+Weak.
+
+This tells you:
+
+> Low-vol or high-vol sorting is not producing strong risk-adjusted returns in your universe.
+
+It’s barely adding value.
+
+### Vol Factor Max DD: **-104%**
+
+This is extremely concerning.
+
+You cannot lose more than -100% in a long-only system.
+
+This suggests:
+
+* You are running a long-short volatility factor.
+* Or compounding logic might not be correct.
+* Or leverage implicit in construction.
+
+You should inspect that part.
+
+---
+
+# 📊 Cross-Sectional Dispersion: **0.215**
+
+This is strong.
+
+Typical ranges:
+
+| Dispersion  | Meaning                  |
+| ----------- | ------------------------ |
+| < 0.05      | Very low differentiation |
+| 0.05 – 0.15 | Normal                   |
+| > 0.20      | High opportunity         |
+
+0.21 means:
+
+> Stocks are moving very differently from each other.
+
+That’s perfect for cross-sectional momentum.
+
+High dispersion = more alpha opportunity.
+
+---
+
+# 🔄 Monthly Turnover: **0.71**
+
+This means:
+
+~71% of your portfolio changes each month.
+
+That is:
+
+| Turnover  | Meaning   |
+| --------- | --------- |
+| < 0.2     | Low       |
+| 0.2 – 0.5 | Moderate  |
+| 0.5 – 0.8 | High      |
+| > 1.0     | Very high |
+
+So yours is:
+
+⚠️ High
+
+That means:
+
+* High transaction costs
+* Implementation friction
+* Possibly unstable rankings
+
+Momentum is naturally high turnover.
+
+This is one of its structural weaknesses.
+
+---
+
+# 🎯 Big Picture Assessment
+
+### Strengths
+
+✔ Sharpe > 1
+✔ Strong bear performance
+✔ High dispersion (good factor environment)
+✔ Factor is clearly working
+
+---
+
+### Weaknesses
+
+⚠️ Massive drawdown (-74%)
+⚠️ High turnover
+⚠️ Volatility factor weak
+⚠️ Tail-risk exposure
+
+---
+
+# 🧠 What This Says About Your Strategy
+
+You have built:
+
+> A high-powered, high-risk momentum engine.
+
+It performs well statistically.
+
+But:
+
+* It crashes hard.
+* It is not smooth.
+* It would be psychologically difficult to hold.
+
+Very realistic momentum behavior.
+
+---
+
+# 🏦 If This Was a Fund Report
+
+You would write:
+
+> The momentum factor delivered a Sharpe ratio of 1.33 over the sample period, with particularly strong performance during bearish regimes (Sharpe 2.31), suggesting defensive cross-sectional properties. However, the strategy experienced significant tail risk, with a maximum drawdown of -73.9%, highlighting vulnerability to momentum crashes and sharp reversals. Turnover averaged 71% per month, indicating meaningful implementation costs and portfolio instability.
+
+That sounds professional.
+
+---
+
+# ⚠️ One Important Question
+
+Is this:
+
+* Equal-weight long-short?
+* Dollar neutral?
+* Beta neutral?
+* Or raw long-short without hedge?
+
+Because -74% drawdown suggests:
+
+* Possibly not beta-neutral
+* Or severe reversal period
+
+If you want, we can:
+
+* Diagnose what caused the large DD
+* Add crash-protection filter
+* Add volatility scaling
+* Or smooth turnover
+
+---
+
+You’re now past beginner level.
+This is real factor research.
+
+Want to improve it next?
+
+----------
+
+Terminal Output to TEST
+
+(venv) prashu@mac Equity Factor % python main.py
+[*********************100%***********************]  10 of 10 completed
+[*********************100%***********************]  1 of 1 completed
+Strategy returns (first 12 rows):
+Date
+2015-01-31   NaN
+2015-02-28   NaN
+2015-03-31   NaN
+2015-04-30   NaN
+2015-05-31   NaN
+2015-06-30   NaN
+2015-07-31   NaN
+2015-08-31   NaN
+2015-09-30   NaN
+2015-10-31   NaN
+2015-11-30   NaN
+2015-12-31   NaN
+Freq: ME, dtype: float64
+Monthly strategy returns after resample:
+Date
+2024-06-30   -0.408972
+2024-07-31    0.693584
+2024-08-31    0.236720
+2024-09-30    0.234062
+2024-10-31    0.301024
+2024-11-30    0.309034
+2024-12-31    0.676555
+2025-01-31   -0.710718
+2025-02-28   -0.081825
+2025-03-31   -0.020267
+2025-04-30    0.699718
+2025-05-31   -0.012462
+Freq: ME, dtype: float64
+Bull Sharpe: 1.166443357048819
+Bear Sharpe: 2.3115864932716015
+Sharpe: 1.3294026934209033
+Max Drawdown: -0.7397712280632492
+Volatility Factor Sharpe: 0.33617841120918596
+Volatility Factor Max DD: -1.0464849298528496
+Average Cross-Sectional Dispersion: 0.21547373147106336
+Average Monthly Turnover: 0.7142857142857143
+
+Top/Bottom Ranking Table (last 12 months):
+                                Top Stocks                                    Top Returns  \
+Date                                                                                        
+2025-02-28  [PSIX, PLTR, MSTR, QBTS, TOST]      [-0.2333, 0.0232, 0.1771, 0.491, -0.1379]   
+2025-03-31  [PSIX, PLTR, QBTS, TOST, FOUR]      [0.0718, 0.3776, -0.0586, 0.0904, 0.0328]   
+2025-04-30  [PSIX, QBTS, PLTR, MSTR, TOST]         [0.5454, 1.0443, 0.128, -0.02, 0.1798]   
+2025-05-31  [QBTS, PSIX, PLTR, MSTR, TOST]      [-0.0868, 0.4499, 0.0475, 0.0965, 0.0553]   
+2025-06-30  [QBTS, PSIX, PLTR, MSTR, TOST]       [0.1971, 0.4132, 0.1548, 0.0066, 0.1013]   
+2025-07-31  [QBTS, PSIX, PLTR, MSTR, TOST]   [-0.0783, -0.0877, 0.0016, -0.1674, -0.0724]   
+2025-08-31  [QBTS, PLTR, PSIX, MSTR, TOST]     [0.4958, 0.1571, 0.1872, -0.0282, -0.2064]   
+2025-09-30  [QBTS, PSIX, PLTR, RIOT, MSTR]     [0.5004, -0.1094, 0.1036, 0.0772, -0.1581]   
+2025-10-31  [QBTS, PLTR, PSIX, RIOT, MSTR]  [-0.4452, -0.1571, -0.4185, -0.1768, -0.3978]   
+2025-11-30  [QBTS, PLTR, PSIX, RIOT, TOST]       [0.211, 0.0603, 0.0723, -0.2245, 0.0415]   
+2025-12-31  [QBTS, PLTR, PSIX, RIOT, TOST]     [-0.1813, -0.1856, 0.2467, 0.2363, -0.125]   
+2026-01-31  [QBTS, PLTR, PSIX, RIOT, VKTX]      [-0.0402, -0.093, 0.3574, 0.0204, 0.0131]   
+
+                             Bottom Stocks                                 Bottom Returns  
+Date                                                                                       
+2025-02-28  [AZTR, BEEM, VKTX, RIOT, FOUR]  [-0.1515, -0.1405, -0.1508, -0.2343, -0.1824]  
+2025-03-31  [AZTR, BEEM, VKTX, RIOT, MSTR]       [0.0921, -0.3137, 0.2175, 0.054, 0.3359]  
+2025-04-30  [AZTR, VKTX, BEEM, RIOT, FOUR]     [-0.1543, -0.0622, 0.1608, 0.1292, 0.1516]  
+2025-05-31  [BEEM, AZTR, VKTX, RIOT, FOUR]     [-0.0744, -0.0333, 0.0033, 0.3604, 0.0478]  
+2025-06-30  [AZTR, BEEM, VKTX, RIOT, FOUR]       [-0.3601, 0.575, 0.2163, 0.1844, 0.0412]  
+2025-07-31  [BEEM, VKTX, AZTR, RIOT, FOUR]    [0.1915, -0.0431, -0.0042, 0.0606, -0.1123]  
+2025-08-31  [AZTR, BEEM, VKTX, FOUR, RIOT]    [-0.4089, 0.1008, -0.0109, -0.1536, 0.3535]  
+2025-09-30  [VKTX, AZTR, BEEM, FOUR, TOST]   [0.3942, -0.2293, -0.0642, -0.1055, -0.0019]  
+2025-10-31  [VKTX, AZTR, BEEM, FOUR, TOST]   [-0.0226, -0.2864, -0.2931, 0.0729, -0.0443]  
+2025-11-30  [AZTR, FOUR, VKTX, BEEM, MSTR]   [-0.322, -0.1554, -0.0347, -0.2098, -0.1409]  
+2025-12-31  [AZTR, MSTR, BEEM, FOUR, VKTX]     [-0.0323, 0.0047, 0.096, -0.0593, -0.1717]  
+2026-01-31  [AZTR, MSTR, BEEM, FOUR, TOST]  [-0.1921, -0.0556, -0.0821, -0.0617, -0.1168]  
+
+Top/Bottom Ranking Table (last 12 months):
+                                Top Stocks                           Top Expected Returns  \
+Date                                                                                        
+2025-02-28  [PSIX, PLTR, MSTR, QBTS, TOST]      [-0.2333, 0.0232, 0.1771, 0.491, -0.1379]   
+2025-03-31  [PSIX, PLTR, QBTS, TOST, FOUR]      [0.0718, 0.3776, -0.0586, 0.0904, 0.0328]   
+2025-04-30  [PSIX, QBTS, PLTR, MSTR, TOST]         [0.5454, 1.0443, 0.128, -0.02, 0.1798]   
+2025-05-31  [QBTS, PSIX, PLTR, MSTR, TOST]      [-0.0868, 0.4499, 0.0475, 0.0965, 0.0553]   
+2025-06-30  [QBTS, PSIX, PLTR, MSTR, TOST]       [0.1971, 0.4132, 0.1548, 0.0066, 0.1013]   
+2025-07-31  [QBTS, PSIX, PLTR, MSTR, TOST]   [-0.0783, -0.0877, 0.0016, -0.1674, -0.0724]   
+2025-08-31  [QBTS, PLTR, PSIX, MSTR, TOST]     [0.4958, 0.1571, 0.1872, -0.0282, -0.2064]   
+2025-09-30  [QBTS, PSIX, PLTR, RIOT, MSTR]     [0.5004, -0.1094, 0.1036, 0.0772, -0.1581]   
+2025-10-31  [QBTS, PLTR, PSIX, RIOT, MSTR]  [-0.4452, -0.1571, -0.4185, -0.1768, -0.3978]   
+2025-11-30  [QBTS, PLTR, PSIX, RIOT, TOST]       [0.211, 0.0603, 0.0723, -0.2245, 0.0415]   
+2025-12-31  [QBTS, PLTR, PSIX, RIOT, TOST]     [-0.1813, -0.1856, 0.2467, 0.2363, -0.125]   
+2026-01-31  [QBTS, PLTR, PSIX, RIOT, VKTX]      [-0.0402, -0.093, 0.3574, 0.0204, 0.0131]   
+
+                             Bottom Stocks                        Bottom Expected Returns  
+Date                                                                                       
+2025-02-28  [AZTR, BEEM, VKTX, RIOT, FOUR]  [-0.1515, -0.1405, -0.1508, -0.2343, -0.1824]  
+2025-03-31  [AZTR, BEEM, VKTX, RIOT, MSTR]       [0.0921, -0.3137, 0.2175, 0.054, 0.3359]  
+2025-04-30  [AZTR, VKTX, BEEM, RIOT, FOUR]     [-0.1543, -0.0622, 0.1608, 0.1292, 0.1516]  
+2025-05-31  [BEEM, AZTR, VKTX, RIOT, FOUR]     [-0.0744, -0.0333, 0.0033, 0.3604, 0.0478]  
+2025-06-30  [AZTR, BEEM, VKTX, RIOT, FOUR]       [-0.3601, 0.575, 0.2163, 0.1844, 0.0412]  
+2025-07-31  [BEEM, VKTX, AZTR, RIOT, FOUR]    [0.1915, -0.0431, -0.0042, 0.0606, -0.1123]  
+2025-08-31  [AZTR, BEEM, VKTX, FOUR, RIOT]    [-0.4089, 0.1008, -0.0109, -0.1536, 0.3535]  
+2025-09-30  [VKTX, AZTR, BEEM, FOUR, TOST]   [0.3942, -0.2293, -0.0642, -0.1055, -0.0019]  
+2025-10-31  [VKTX, AZTR, BEEM, FOUR, TOST]   [-0.0226, -0.2864, -0.2931, 0.0729, -0.0443]  
+2025-11-30  [AZTR, FOUR, VKTX, BEEM, MSTR]   [-0.322, -0.1554, -0.0347, -0.2098, -0.1409]  
+2025-12-31  [AZTR, MSTR, BEEM, FOUR, VKTX]     [-0.0323, 0.0047, 0.096, -0.0593, -0.1717]  
+2026-01-31  [AZTR, MSTR, BEEM, FOUR, TOST]  [-0.1921, -0.0556, -0.0821, -0.0617, -0.1168]  
+
+Forecast for next month based on latest momentum
+
+Forecast Top Momentum Stocks: ['QBTS']
+
+Forecast Bottom Momentum Stocks: ['AZTR']
+(venv) prashu@mac Equity Factor % 
+
++4 graphs MLSx2, VKTXx1, Individual cumulativex1
+
