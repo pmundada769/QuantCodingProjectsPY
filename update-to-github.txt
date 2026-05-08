@@ -1,0 +1,5 @@
+git add .
+git commit -m "add options pricer and updated equity factor files"
+git push  
+
+pip3 install xyz --break-system-packages ~ if saying externally managed when pip3 install xyz
