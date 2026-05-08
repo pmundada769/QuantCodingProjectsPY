@@ -4,7 +4,7 @@ Computes option prices and all first/second-order Greeks.
 """
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import norm # type: ignore
 from dataclasses import dataclass
 from typing import Literal
 
