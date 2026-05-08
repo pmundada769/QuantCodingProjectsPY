@@ -1,4 +1,4 @@
-HOW TO RUN IT:
+HOW TO RUN IT (on my device specifically):
 ---------------------------------
 
 [1] Inside VSC, open VSC terminal
@@ -69,19 +69,6 @@ Implementation constraints → high turnover warns of practical issues.
 
 
 
-GPT Output to TEST:
-Good. Now this is a **real output**. Let’s analyse it properly — like you would in an interview or portfolio report.
-
----
-
-# 📊 Your Momentum Strategy Results
-
-## 🔹 Overall Sharpe: **1.33**
-
-This is strong.
-
-### How to interpret Sharpe:
-
 | Sharpe    | Meaning     |
 | --------- | ----------- |
 | < 0.5     | Weak        |
@@ -90,59 +77,6 @@ This is strong.
 | 1.5 – 2.0 | Very good   |
 | > 2.0     | Exceptional |
 
-So:
-
-> **1.33 = solid institutional-quality factor performance**
-
-Not crazy hedge-fund elite, but absolutely respectable.
-
----
-
-# 🐂 Bull Sharpe: **1.17**
-
-Good performance during rising markets.
-
-That means:
-
-* Your momentum strategy works in risk-on environments.
-* It captures trend continuation.
-
-Healthy sign.
-
----
-
-# 🐻 Bear Sharpe: **2.31**
-
-This is very interesting.
-
-This means:
-
-> Your strategy performs EVEN BETTER during market stress.
-
-That’s unusual.
-
-Momentum often struggles in sharp reversals, but if:
-
-* Losers keep falling
-* Winners keep falling less
-
-Long-short momentum can perform well in bear regimes.
-
-This suggests:
-
-✅ Strong cross-sectional separation
-✅ Defensive alpha properties
-⚠️ But possibly concentrated in high-vol names
-
----
-
-# 📉 Max Drawdown: **-73.9%**
-
-This is the biggest red flag.
-
-This is very large.
-
-For reference:
 
 | Max DD | Interpretation     |
 | ------ | ------------------ |
@@ -151,55 +85,6 @@ For reference:
 | -40%   | Aggressive         |
 | -60%+  | Extremely volatile |
 
--73% means:
-
-> At some point, your strategy lost nearly 3/4 of its value from peak.
-
-Even with Sharpe 1.33, this means:
-
-⚠️ Large tail risk
-⚠️ Likely momentum crash event
-⚠️ Possibly concentrated exposure
-
-Momentum crashes are common (e.g., violent reversals).
-
-This is the classic weakness of momentum.
-
----
-
-# 🌪 Volatility Factor
-
-### Vol Factor Sharpe: **0.34**
-
-Weak.
-
-This tells you:
-
-> Low-vol or high-vol sorting is not producing strong risk-adjusted returns in your universe.
-
-It’s barely adding value.
-
-### Vol Factor Max DD: **-104%**
-
-This is extremely concerning.
-
-You cannot lose more than -100% in a long-only system.
-
-This suggests:
-
-* You are running a long-short volatility factor.
-* Or compounding logic might not be correct.
-* Or leverage implicit in construction.
-
-You should inspect that part.
-
----
-
-# 📊 Cross-Sectional Dispersion: **0.215**
-
-This is strong.
-
-Typical ranges:
 
 | Dispersion  | Meaning                  |
 | ----------- | ------------------------ |
@@ -207,23 +92,7 @@ Typical ranges:
 | 0.05 – 0.15 | Normal                   |
 | > 0.20      | High opportunity         |
 
-0.21 means:
 
-> Stocks are moving very differently from each other.
-
-That’s perfect for cross-sectional momentum.
-
-High dispersion = more alpha opportunity.
-
----
-
-# 🔄 Monthly Turnover: **0.71**
-
-This means:
-
-~71% of your portfolio changes each month.
-
-That is:
 
 | Turnover  | Meaning   |
 | --------- | --------- |
@@ -232,101 +101,9 @@ That is:
 | 0.5 – 0.8 | High      |
 | > 1.0     | Very high |
 
-So yours is:
 
-⚠️ High
 
-That means:
-
-* High transaction costs
-* Implementation friction
-* Possibly unstable rankings
-
-Momentum is naturally high turnover.
-
-This is one of its structural weaknesses.
-
----
-
-# 🎯 Big Picture Assessment
-
-### Strengths
-
-✔ Sharpe > 1
-✔ Strong bear performance
-✔ High dispersion (good factor environment)
-✔ Factor is clearly working
-
----
-
-### Weaknesses
-
-⚠️ Massive drawdown (-74%)
-⚠️ High turnover
-⚠️ Volatility factor weak
-⚠️ Tail-risk exposure
-
----
-
-# 🧠 What This Says About Your Strategy
-
-You have built:
-
-> A high-powered, high-risk momentum engine.
-
-It performs well statistically.
-
-But:
-
-* It crashes hard.
-* It is not smooth.
-* It would be psychologically difficult to hold.
-
-Very realistic momentum behavior.
-
----
-
-# 🏦 If This Was a Fund Report
-
-You would write:
-
-> The momentum factor delivered a Sharpe ratio of 1.33 over the sample period, with particularly strong performance during bearish regimes (Sharpe 2.31), suggesting defensive cross-sectional properties. However, the strategy experienced significant tail risk, with a maximum drawdown of -73.9%, highlighting vulnerability to momentum crashes and sharp reversals. Turnover averaged 71% per month, indicating meaningful implementation costs and portfolio instability.
-
-That sounds professional.
-
----
-
-# ⚠️ One Important Question
-
-Is this:
-
-* Equal-weight long-short?
-* Dollar neutral?
-* Beta neutral?
-* Or raw long-short without hedge?
-
-Because -74% drawdown suggests:
-
-* Possibly not beta-neutral
-* Or severe reversal period
-
-If you want, we can:
-
-* Diagnose what caused the large DD
-* Add crash-protection filter
-* Add volatility scaling
-* Or smooth turnover
-
----
-
-You’re now past beginner level.
-This is real factor research.
-
-Want to improve it next?
-
-----------
-
-Terminal Output to TEST
+Results of Terminal Run Test 
 
 (venv) prashu@mac Equity Factor % python main.py
 [*********************100%***********************]  10 of 10 completed
