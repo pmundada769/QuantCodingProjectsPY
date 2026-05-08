@@ -429,4 +429,69 @@ In the Strategy Builder tab, select Iron Condor. The payoff chart shows a flat p
 
 ---
 
+Here's the tldr:
+
+What it is: A calculator for options — financial contracts that let you bet on whether a stock will go up or down, without buying the stock itself.
+
+The sidebar — your inputs:
+
+Spot (S) — current stock price
+Strike (K) — the price you're betting the stock will reach
+Days to Expiry — how long until the contract expires
+Volatility — how much the stock jumps around (higher = more expensive option)
+Rate — interest rate (use current US rate ~5%)
+Div Yield — dividends the stock pays (0 for most tech stocks)
+
+
+The numbers at the top:
+
+Option Price — what this contract should fairly cost right now
+Intrinsic — how much it's worth if you exercised it today
+Time Value — the extra premium you're paying for time remaining
+
+
+The Greeks tables — risk dials:
+
+Delta — if the stock moves $1, your option moves by this much. 0.53 = moves 53 cents per $1
+Theta — how much value you lose per day just by doing nothing. Always negative — time kills options
+Vega — how much the price changes if volatility spikes. Big news event = vol spike = option gets more expensive
+Gamma — how fast Delta is changing. High near expiry
+
+
+The tabs:
+
+Payoff Diagram — shows exactly how much you make or lose at different stock prices at expiry
+Greeks vs Spot — shows how your risk changes as the stock moves
+Greeks vs Time — shows how fast you're losing value as days pass
+Vol Smile — shows how real markets price vol differently at different strikes
+Strategy Builder — combines multiple options into one position (see below)
+
+
+Strategies — the most useful tab:
+
+Bull Call Spread — you think stock goes up, but want to pay less. Cap your upside, cap your cost
+Bear Put Spread — you think stock goes down
+Long Straddle — you think something big happens but don't know which direction. Profits from big moves either way
+Long Strangle — same as straddle but cheaper, needs an even bigger move to profit
+Covered Call — you own the stock already, sell a call to collect premium income
+Protective Put — you own the stock, buy a put as insurance against a crash
+Iron Condor — you think the stock goes nowhere. Profit from time decay as long as it stays in a range
+Long Butterfly — very precise bet the stock lands at exactly one price at expiry
+
+
+Sensitivity Table — the grid at the bottom. Shows you the option price at every combination of stock price and volatility. Red = expensive, yellow = cheap. Useful for seeing how much vol matters vs stock price.
+
+What it works for:
+It prices any underlying — stocks, indices (S&P 500), FX (EUR/USD), commodities. Just change the inputs. For FX, the "dividend yield" input becomes the foreign interest rate. For bonds it's less applicable — bonds use different models entirely.
+
+How a trader actually uses this:
+
+Look up the real market price of an option on a broker (IBKR, Robinhood etc.)
+Type it into the IV Calculator at the bottom of the sidebar
+It tells you the implied vol — what vol the market is pricing in
+If you think actual vol will be higher than that, the option is cheap → buy it
+If you think actual vol will be lower, the option is expensive → sell it
+
+---
+
 *Pranshu Mundada*
