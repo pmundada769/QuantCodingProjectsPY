@@ -5,8 +5,8 @@ All Plotly visualisations for the Monte Carlo simulator.
 Returns go.Figure objects for use in Streamlit.
 '''
 import numpy as np
-import plotly.graph_objects as go
-import plotly.subplots as sp
+import plotly.graph_objects as go # type: ignore
+import plotly.subplots as sp # type: ignore
 from simulator import SimulationResult
 
 '''colour palette - amber/rust on near-black, different from Options Pricer'''
