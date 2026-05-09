@@ -54,7 +54,7 @@ except Exception as e:
     st.error(f"Could not load holdings: {e}")
     st.stop()
 
-@st.cache_data(ttl=300)   # refresh every 5 minutes
+@st.cache_data(ttl=300)
 def load_market_data(tickers_tuple, period):
     holdings_local = load_holdings("holdings.csv")
     holdings_local = fetch_prices(holdings_local)
@@ -77,10 +77,28 @@ holdings_df  = holdings_to_df(holdings)
 sectors_df   = sector_summary(holdings)
 
 # totals
-total_value    = holdings_df["Cur Value"].sum()
-total_cost     = holdings_df["Cost Basis"].sum()
-total_pnl      = holdings_df["P&L ($)"].sum()
-total_pnl_pct  = (total_pnl / total_cost * 100) if total_cost > 0 else 0
+total_value   = holdings_df["Cur Value"].sum()
+total_cost    = holdings_df["Cost Basis"].sum()
+total_pnl     = holdings_df["P&L ($)"].sum()
+total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
+
+# colour helper — avoids applymap/map version issues entirely
+def colour_pnl(val):
+    if isinstance(val, str):
+        if val.startswith("$+") or (val.endswith("%") and val.startswith("+")):
+            return "color: #1ABC9C"
+        if val.startswith("$-") or (val.endswith("%") and val.startswith("-")):
+            return "color: #E74C3C"
+    return ""
+
+HOLDINGS_FORMAT = {
+    "Avg Cost":   "${:.2f}",
+    "Cur Price":  "${:.2f}",
+    "Cur Value":  "${:,.2f}",
+    "Cost Basis": "${:,.2f}",
+    "P&L ($)":    "${:+,.2f}",
+    "P&L (%)":    "{:+.2f}%",
+}
 
 # header
 st.markdown("# 💼 Portfolio Tracker")
@@ -89,13 +107,12 @@ st.markdown("---")
 
 # summary metrics
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Total Value",    f"${total_value:,.0f}")
-c2.metric("Total Cost",     f"${total_cost:,.0f}")
-pnl_col = "normal" if total_pnl >= 0 else "inverse"
-c3.metric("Total P&L",      f"${total_pnl:+,.0f}", delta=f"{total_pnl_pct:+.2f}%")
-c4.metric("Sharpe Ratio",   metrics["Sharpe Ratio"])
-c5.metric("Max Drawdown",   metrics["Max Drawdown"])
-c6.metric("Ann. Return",    metrics["Ann. Return"])
+c1.metric("Total Value",  f"${total_value:,.0f}")
+c2.metric("Total Cost",   f"${total_cost:,.0f}")
+c3.metric("Total P&L",    f"${total_pnl:+,.0f}", delta=f"{total_pnl_pct:+.2f}%")
+c4.metric("Sharpe Ratio", metrics["Sharpe Ratio"])
+c5.metric("Max Drawdown", metrics["Max Drawdown"])
+c6.metric("Ann. Return",  metrics["Ann. Return"])
 
 st.markdown("---")
 
@@ -128,13 +145,16 @@ with tab3:
         st.plotly_chart(fig3, use_container_width=True)
     with col_d:
         st.markdown("#### Sector Breakdown")
-        st.dataframe(holdings_df.style.format({
-            "Avg Cost": "${:.2f}", "Cur Price": "${:.2f}",
-            "Cur Value": "${:,.2f}", "Cost Basis": "${:,.2f}",
-            "P&L ($)": "${:+,.2f}", "P&L (%)": "{:+.2f}%",
-        }).map(lambda v: "color: #1ABC9C" if isinstance(v, str) and v.startswith("$+")
-                else ("color: #E74C3C" if isinstance(v, str) and v.startswith("$-") else "")),
-        hide_index=True, use_container_width=True)
+        st.dataframe(
+            sectors_df.style.format({
+                "Value":      "${:,.0f}",
+                "PnL":        "${:+,.0f}",
+                "Weight (%)": "{:.1f}%",
+                "Return (%)": "{:+.2f}%",
+            }),
+            hide_index=True,
+            use_container_width=True,
+        )
 
 with tab4:
     fig4 = drawdown_chart(port_returns)
@@ -146,13 +166,11 @@ with tab5:
 
 with tab6:
     st.markdown("#### All Holdings")
-    st.dataframe(holdings_df.style.format({
-        "Avg Cost": "${:.2f}", "Cur Price": "${:.2f}",
-        "Cur Value": "${:,.2f}", "Cost Basis": "${:,.2f}",
-        "P&L ($)": "${:+,.2f}", "P&L (%)": "{:+.2f}%",
-    }).applymap(lambda v: "color: #1ABC9C" if isinstance(v, str) and v.startswith("$+")
-                else ("color: #E74C3C" if isinstance(v, str) and v.startswith("$-") else "")),
-    hide_index=True, use_container_width=True)
+    st.dataframe(
+        holdings_df.style.format(HOLDINGS_FORMAT).map(colour_pnl),
+        hide_index=True,
+        use_container_width=True,
+    )
 
     with st.expander("📊 Full Performance Metrics"):
         metrics_df = pd.DataFrame(metrics.items(), columns=["Metric", "Value"])
