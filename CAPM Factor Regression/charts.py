@@ -4,8 +4,8 @@
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.subplots as sp
+import plotly.graph_objects as go # type: ignore
+import plotly.subplots as sp # type: ignore
 from regression import RegressionResult
 
 # forest green on near-black — different from all previous projects

@@ -166,7 +166,7 @@ def portfolio_metrics(daily_returns: pd.Series, benchmark_returns: pd.Series = N
     if benchmark_returns is not None:
         b = benchmark_returns.reindex(r.index).dropna()
         if len(b) > 10:
-            from scipy import stats
+            from scipy import stats # type: ignore
             slope, intercept, rv, _, _ = stats.linregress(b.values, r.reindex(b.index).values)
             metrics["Beta (vs SPY)"]  = f"{slope:.3f}"
             metrics["Alpha (ann %)"]  = f"{intercept*252*100:.2f}%"

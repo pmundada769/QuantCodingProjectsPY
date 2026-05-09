@@ -4,8 +4,8 @@
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.subplots as sp
+import plotly.graph_objects as go # type: ignore
+import plotly.subplots as sp # type: ignore
 
 # deep plum / violet on near-black — distinct from all previous projects
 VIOLET  = "#9B59B6"
@@ -45,7 +45,7 @@ def cumulative_return_chart(daily_returns: pd.Series, benchmark: pd.Series = Non
     ))
 
     if benchmark is not None:
-        b_aligned = benchmark.reindex(daily_returns.index).fillna(method="ffill")
+        b_aligned = benchmark.reindex(daily_returns.index).ffill()
         b_cum     = (1 + b_aligned).cumprod()
         fig.add_trace(go.Scatter(
             x=b_cum.index, y=(b_cum - 1) * 100,

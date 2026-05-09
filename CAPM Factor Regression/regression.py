@@ -8,7 +8,7 @@
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from scipy import stats
+from scipy import stats # type: ignore
 from dataclasses import dataclass
 from typing import Optional
 import io
