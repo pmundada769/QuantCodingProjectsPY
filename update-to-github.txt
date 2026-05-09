@@ -3,3 +3,18 @@ git commit -m "add options pricer and updated equity factor files"
 git push  
 
 pip3 install xyz --break-system-packages ~ if saying externally managed when pip3 install xyz
+
+
+
+# Step 1: remove it from git tracking
+git rm --cached .DS_Store
+git rm --cached "**/.DS_Store" 2>/dev/null; true
+
+# Step 2: add to .gitignore (run once, ever)
+echo ".DS_Store" >> .gitignore
+echo "**/.DS_Store" >> .gitignore
+
+# Step 3: commit and push
+git add .gitignore
+git commit -m "remove .DS_Store and gitignore it permanently"
+git push

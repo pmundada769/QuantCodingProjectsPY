@@ -4,7 +4,7 @@
 # Run with: streamlit run app.py
 # Edit holdings.csv to match your actual portfolio.
 
-import streamlit as st
+import streamlit as st # type: ignore
 import numpy as np
 import pandas as pd
 import yfinance as yf
