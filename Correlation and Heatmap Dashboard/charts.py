@@ -4,8 +4,8 @@
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.subplots as sp
+import plotly.graph_objects as go # type: ignore
+import plotly.subplots as sp # type: ignore
 
 # warm orange-red on near-black — last distinct palette
 ORANGE  = "#FF6B35"
