@@ -4,7 +4,7 @@
 # Run with: streamlit run app.py
 # Edit holdings.csv to match your actual portfolio.
 
-import streamlit as st # type: ignore
+import streamlit as st
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -128,10 +128,13 @@ with tab3:
         st.plotly_chart(fig3, use_container_width=True)
     with col_d:
         st.markdown("#### Sector Breakdown")
-        st.dataframe(sectors_df.style.format({
-            "Value": "${:,.0f}", "PnL": "${:+,.0f}",
-            "Weight (%)": "{:.1f}%", "Return (%)": "{:+.2f}%",
-        }), hide_index=True, use_container_width=True)
+        st.dataframe(holdings_df.style.format({
+            "Avg Cost": "${:.2f}", "Cur Price": "${:.2f}",
+            "Cur Value": "${:,.2f}", "Cost Basis": "${:,.2f}",
+            "P&L ($)": "${:+,.2f}", "P&L (%)": "{:+.2f}%",
+        }).map(lambda v: "color: #1ABC9C" if isinstance(v, str) and v.startswith("$+")
+                else ("color: #E74C3C" if isinstance(v, str) and v.startswith("$-") else "")),
+        hide_index=True, use_container_width=True)
 
 with tab4:
     fig4 = drawdown_chart(port_returns)
