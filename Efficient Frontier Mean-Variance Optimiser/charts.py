@@ -69,7 +69,7 @@ def frontier_chart(result: FrontierResult, show_random: bool = True) -> go.Figur
                     thickness  = 12,
                     len        = 0.6,
                     tickfont   = dict(color=TEXT),
-                    titlefont  = dict(color=TEXT),
+                    title_font  = dict(color=TEXT),
                 ),
             ),
             name      = "Random Portfolios",
