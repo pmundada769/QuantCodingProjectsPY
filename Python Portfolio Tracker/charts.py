@@ -140,8 +140,10 @@ def daily_returns_histogram(daily_returns: pd.Series) -> go.Figure:
 
 
 def top_movers_bar(holdings_df: pd.DataFrame, n: int = 10) -> go.Figure:
-    df      = holdings_df.nlargest(n, "P&L (%)").append(
-              holdings_df.nsmallest(n, "P&L (%)")).drop_duplicates()
+    df = pd.concat([
+         holdings_df.nlargest(n,  "P&L (%)"),
+         holdings_df.nsmallest(n, "P&L (%)")
+     ]).drop_duplicates()
     colours = [MINT if v >= 0 else CORAL for v in df["P&L (%)"]]
 
     fig = go.Figure(go.Bar(
