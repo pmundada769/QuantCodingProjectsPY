@@ -24,6 +24,9 @@ Built in Python mostly. Each project has a Streamlit dashboard, CLI, and test su
 | 12 | [PCA Factor Model](./PCA%20Factor/) | Extracts latent risk factors from a stock universe via PCA | Principal Component Analysis, factor loadings, rolling PCA |
 | 13 | [vectorbt Backtest](./VBT%20Backtest/) | Professional momentum backtest with transaction costs and slippage | vectorbt, position sizing, underwater curve |
 | 14 | [alphalens Factor Analysis](./Alphalens%20Factor/) | Industry-standard factor evaluation: IC, turnover, quantile returns | Information Coefficient, factor decay, Quantopian methodology |
+| 15 | [NLP News Sentiment](./NLP_Sentiment/) | Scrapes financial headlines, classifies sentiment with FinBERT, maps scores to forward returns, trains a signal model | FinBERT, HuggingFace Transformers, NewsAPI, sentiment → alpha pipeline |
+| 16 | [Financial Statement Analyser](./Financial_Statements/) | Pulls 10-K/10-Q data from SEC EDGAR, computes Piotroski F-Score, Altman Z-Score, margin trends, LLM MD&A summary | SEC EDGAR API, fundamental scoring, Piotroski, Altman, LLM integration |
+| 17 | [Unified Trading Signal Bot](./Signal_Bot/) | Ensemble of all strategy signals → vol-targeted position sizing → paper trade execution via Alpaca API | Signal aggregation, risk overlay, live paper trading, systematic execution |
 
 ---
 
