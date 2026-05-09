@@ -204,7 +204,7 @@ def correlation_heatmap(prices: pd.DataFrame) -> go.Figure:
             title     = "ρ",
             thickness = 14,
             tickfont  = dict(color=TEXT),
-            titlefont = dict(color=TEXT),
+            title_font = dict(color=TEXT),
         ),
     ))
 
