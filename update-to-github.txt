@@ -18,3 +18,8 @@ echo "**/.DS_Store" >> .gitignore
 git add .gitignore
 git commit -m "remove .DS_Store and gitignore it permanently"
 git push
+
+
+
+git pull --rebase origin main
+git push
