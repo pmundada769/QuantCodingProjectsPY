@@ -4,7 +4,7 @@
 Monte Carlo Portfolio Simulator — Streamlit Dashboard
 Run with: streamlit run app.py
 '''
-import streamlit as st
+import streamlit as st # type: ignore
 import numpy as np
 import pandas as pd
 from simulator import run_simulation, run_multi_asset_simulation
@@ -13,7 +13,7 @@ from charts import (
     var_cvar_bar, cdf_chart, vol_sensitivity_chart,
 )
 
-'''page config'''
+#page config
 st.set_page_config(
     page_title = "Monte Carlo Simulator",
     page_icon  = "🎲",
@@ -21,7 +21,7 @@ st.set_page_config(
     initial_sidebar_state = "expanded",
 )
 
-'''custom CSS - IBM Plex Mono, amber on dark, different from Options Pricer'''
+#custom CSS - IBM Plex Mono, amber on dark, different from Options Pricer
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
@@ -74,7 +74,7 @@ hr { border-color: #1A2030 !important; }
 """, unsafe_allow_html=True)
 
 
-'''sidebar inputs'''
+#sidebar inputs
 with st.sidebar:
     st.markdown("## 🎲 Parameters")
     st.markdown("---")
@@ -138,7 +138,7 @@ with st.sidebar:
     st.caption("Geometric Brownian Motion\nIto-corrected drift")
 
 
-'''run simulation'''
+#run simulation
 if mode == "Single Asset":
     result = run_simulation(
         initial_value  = initial_value,
@@ -172,7 +172,7 @@ else:
     )
 
 
-'''header'''
+#header
 st.markdown("# 🎲 Monte Carlo Portfolio Simulator")
 horizon_label = f"{horizon_days}d" if horizon_days < 252 else f"{horizon_days//252}yr"
 st.markdown(
