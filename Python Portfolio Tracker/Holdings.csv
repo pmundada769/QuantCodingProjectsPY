@@ -1,0 +1,16 @@
+ticker,shares,avg_cost,sector
+AAPL,50,145.20,Technology
+MSFT,30,280.50,Technology
+NVDA,20,420.00,Technology
+JPM,40,155.30,Financials
+BAC,60,32.10,Financials
+JNJ,25,165.00,Healthcare
+PFE,80,45.50,Healthcare
+XOM,35,95.20,Energy
+CVX,25,155.40,Energy
+AMZN,15,130.00,Consumer Discretionary
+HD,20,310.00,Consumer Discretionary
+PG,30,145.60,Consumer Staples
+KO,50,60.20,Consumer Staples
+SPY,10,420.00,ETF
+TLT,20,95.00,ETF
