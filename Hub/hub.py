@@ -4,7 +4,7 @@
 # Central launcher for all projects and tools.
 # Run with: streamlit run hub.py
 
-import streamlit as st
+import streamlit as st # type: ignore
 import subprocess
 import sys
 import os

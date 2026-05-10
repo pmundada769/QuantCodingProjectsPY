@@ -3,11 +3,11 @@
 # Unified Trading Signal Bot — Streamlit Dashboard
 # Run with: streamlit run app.py
 
-import streamlit as st
+import streamlit as st # type: ignore
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.subplots as sp
+import plotly.graph_objects as go # type: ignore
+import plotly.subplots as sp # type: ignore
 from signal_bot import run_bot, generate_orders, DEFAULT_WEIGHTS, ALPACA_AVAILABLE
 
 st.set_page_config(page_title="Signal Bot", page_icon="🤖", layout="wide")

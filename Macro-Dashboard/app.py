@@ -4,11 +4,11 @@
 # FRED + VIX term structure + FedWatch + DXY + credit spreads + real yields
 # Run with: streamlit run app.py
 
-import streamlit as st
+import streamlit as st # type: ignore
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.subplots as sp
+import plotly.graph_objects as go # type: ignore
+import plotly.subplots as sp # type: ignore
 import requests
 import yfinance as yf
 from datetime import datetime, timedelta

@@ -24,11 +24,42 @@ from typing import Optional
 import yfinance as yf
 
 SEC_HEADERS = {
-    "User-Agent": "FinancialAnalyser/1.0 contact@example.com",
+    "User-Agent": "FinancialAnalyser/1.0 prashu@gmail.com",
     "Accept-Encoding": "gzip, deflate",
+    "Accept": "application/json",
 }
 
 TICKER_CIK_URL = "https://www.sec.gov/files/company_tickers.json"
+
+# hardcoded CIK fallback for the most common tickers — avoids rate limits
+KNOWN_CIKS = {
+    "AAPL":  "0000320193",
+    "MSFT":  "0000789019",
+    "GOOGL": "0001652044",
+    "GOOG":  "0001652044",
+    "AMZN":  "0001018724",
+    "NVDA":  "0001045810",
+    "META":  "0001326801",
+    "TSLA":  "0001318605",
+    "JPM":   "0000019617",
+    "BAC":   "0000070858",
+    "JNJ":   "0000200406",
+    "XOM":   "0000034088",
+    "KO":    "0000021344",
+    "PG":    "0000080424",
+    "HD":    "0000354950",
+    "V":     "0001403161",
+    "WMT":   "0000104169",
+    "DIS":   "0001001039",
+    "NFLX":  "0001065280",
+    "INTC":  "0000050863",
+    "AMD":   "0000002488",
+    "PYPL":  "0001633917",
+    "SBUX":  "0000829224",
+    "BA":    "0000012927",
+    "GS":    "0000886982",
+    "MS":    "0000895421",
+}
 
 
 # ─── data classes ─────────────────────────────────────────────────────────────
@@ -96,17 +127,26 @@ class MDAAnalysis:
 # ─── SEC EDGAR helpers ────────────────────────────────────────────────────────
 
 def get_cik(ticker: str) -> Optional[str]:
+    t = ticker.upper()
+    # check hardcoded table first — avoids SEC rate limits for common tickers
+    if t in KNOWN_CIKS:
+        return KNOWN_CIKS[t]
+    # fallback: live SEC lookup
     try:
-        resp = requests.get(TICKER_CIK_URL,
-                            headers={"User-Agent": "FinancialAnalyser/1.0"},
-                            timeout=10)
+        resp = requests.get(
+            TICKER_CIK_URL,
+            headers={"User-Agent": "FinancialAnalyser/1.0 prashu@gmail.com",
+                     "Accept": "application/json"},
+            timeout=15,
+        )
+        resp.raise_for_status()
         data = resp.json()
         for val in data.values():
-            if val.get("ticker", "").upper() == ticker.upper():
+            if val.get("ticker", "").upper() == t:
                 return str(val["cik_str"]).zfill(10)
         return None
     except Exception as e:
-        print(f"[financials] CIK lookup failed: {e}")
+        print(f"[financials] CIK lookup failed for {ticker}: {e}")
         return None
 
 
@@ -121,11 +161,13 @@ def fetch_edgar_facts(cik: str) -> Optional[dict]:
         return None
 
 
-def extract_series(facts: dict, concept: str, unit: str = "USD") -> Optional[pd.Series]:
+def extract_series(facts: dict, concept: str, unit: str = "USD",
+                   include_quarterly: bool = False) -> Optional[pd.Series]:
     try:
         gaap    = facts.get("facts", {}).get("us-gaap", {})
         entries = gaap.get(concept, {}).get("units", {}).get(unit, [])
-        annual  = [e for e in entries if e.get("form") == "10-K" and "end" in e and "val" in e]
+        forms   = ("10-K", "10-Q") if include_quarterly else ("10-K",)
+        annual  = [e for e in entries if e.get("form") in forms and "end" in e and "val" in e]
         if not annual:
             return None
         df = pd.DataFrame(annual)[["end","val"]].drop_duplicates("end")
@@ -438,7 +480,7 @@ def analyse_mda_with_llm(
 
 def _llm_anthropic(text: str, ticker: str, company: str, api_key: str) -> tuple:
     try:
-        import anthropic # type: ignore
+        import anthropic
         client = anthropic.Anthropic(api_key=api_key)
         prompt = f"""You are a senior equity analyst. Analyse this MD&A section from {company} ({ticker})'s most recent 10-K filing.
 

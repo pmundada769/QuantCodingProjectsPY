@@ -1,630 +1,336 @@
-#signals.py
-
-# Active Trading Signal Engine
-#
-# Implements all indicators and rules from the rulebook:
-#   Mark I:   PSAR + SMA50 + RSI8 — breakout/reversal system
-#   Mark II:  Ichimoku + WPR + Volume — cloud breakout system
-#   Mark III: Volume + Price Action (OB, FVG, LIQ)
-#   Mark IV:  EMA ribbon 21/50/100 + RSI divergence + fractals
-#   ICH+CCI:  Ichimoku cloud breakout + CCI ±100 crossings (your note)
-#
-# Also implements:
-#   3-Candle Sniper entry pattern
-#   Engulfing pattern
-#   Tenkan/Kijun cross
-#   MACD divergence
-#   CCI + WPR synergy signal
+#signals.py — indicator library for Active Trading Dashboard
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from dataclasses import dataclass, field
-from typing import Optional
-
-
-# ─── OHLCV fetch ──────────────────────────────────────────────────────────────
 
 TIMEFRAME_MAP = {
     "1m":  {"interval": "1m",  "period": "1d"},
     "5m":  {"interval": "5m",  "period": "5d"},
     "15m": {"interval": "15m", "period": "5d"},
-    "1h":  {"interval": "60m", "period": "30d"},
-    "4h":  {"interval": "1h",  "period": "60d"},
-    "1d":  {"interval": "1d",  "period": "1y"},
+    "30m": {"interval": "30m", "period": "10d"},
+    "1h":  {"interval": "60m", "period": "60d"},
+    "4h":  {"interval": "1h",  "period": "120d"},
+    "1d":  {"interval": "1d",  "period": "2y"},
     "1wk": {"interval": "1wk", "period": "5y"},
 }
 
+# common FX pairs — yfinance needs =X suffix
+FX_ALIASES = {
+    "EURUSD": "EURUSD=X", "GBPUSD": "GBPUSD=X", "USDJPY": "USDJPY=X",
+    "GBPJPY": "GBPJPY=X", "AUDUSD": "AUDUSD=X", "USDCAD": "USDCAD=X",
+    "USDCHF": "USDCHF=X", "NZDUSD": "NZDUSD=X", "EURGBP": "EURGBP=X",
+    "EURJPY": "EURJPY=X", "XAUUSD": "GC=F",     "GOLD":   "GC=F",
+    "OIL":    "CL=F",     "SILVER": "SI=F",
+}
+
+
 def fetch_ohlcv(ticker: str, timeframe: str = "15m") -> pd.DataFrame:
-    params = TIMEFRAME_MAP.get(timeframe, {"interval": "15m", "period": "5d"})
-    raw    = yf.download(ticker, auto_adjust=True, progress=False, **params)
-    if raw is None or len(raw) < 10:
+    # normalise ticker
+    t = ticker.upper().strip()
+    t = FX_ALIASES.get(t, t)
+    if t.endswith("USD") and "=" not in t and len(t) == 6:
+        t = t + "=X"
+
+    params = dict(TIMEFRAME_MAP.get(timeframe, {"interval": "15m", "period": "5d"}))
+
+    try:
+        raw = yf.download(t, auto_adjust=True, progress=False,
+                          threads=False, **params)
+    except Exception as e:
+        print(f"[signals] Download failed for {t}: {e}")
         return pd.DataFrame()
-    # flatten multi-level columns if present
+
+    if raw is None or len(raw) < 3:
+        return pd.DataFrame()
+
+    # flatten MultiIndex columns (yfinance sometimes returns them)
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = raw.columns.get_level_values(0)
-    raw.columns = [c.strip() for c in raw.columns]
-    return raw.dropna()
 
-
-# ─── Indicators ───────────────────────────────────────────────────────────────
-
-def sma(series: pd.Series, period: int) -> pd.Series:
-    return series.rolling(period).mean()
-
-def ema(series: pd.Series, period: int) -> pd.Series:
-    return series.ewm(span=period, adjust=False).mean()
-
-def rsi(series: pd.Series, period: int = 14) -> pd.Series:
-    delta = series.diff()
-    gain  = delta.clip(lower=0).rolling(period).mean()
-    loss  = (-delta.clip(upper=0)).rolling(period).mean()
-    rs    = gain / loss.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
-
-def cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
-    tp   = (high + low + close) / 3
-    sma_ = tp.rolling(period).mean()
-    mad  = tp.rolling(period).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
-    return (tp - sma_) / (0.015 * mad.replace(0, np.nan))
-
-def williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
-    hh = high.rolling(period).max()
-    ll = low.rolling(period).min()
-    return -100 * (hh - close) / (hh - ll).replace(0, np.nan)
-
-def parabolic_sar(high: pd.Series, low: pd.Series,
-                  af_step: float = 0.02, af_max: float = 0.2) -> pd.Series:
-    n      = len(high)
-    sar    = np.full(n, np.nan)
-    trend  = np.ones(n)      # 1 = up, -1 = down
-    ep     = np.zeros(n)     # extreme point
-    af     = np.full(n, af_step)
-
-    sar[0]   = float(low.iloc[0])
-    ep[0]    = float(high.iloc[0])
-    trend[0] = 1
-
-    for i in range(1, n):
-        prev_sar = sar[i-1]
-        prev_ep  = ep[i-1]
-        prev_af  = af[i-1]
-        prev_tr  = trend[i-1]
-        hi = float(high.iloc[i])
-        lo = float(low.iloc[i])
-
-        if prev_tr == 1:
-            new_sar = prev_sar + prev_af * (prev_ep - prev_sar)
-            new_sar = min(new_sar, float(low.iloc[i-1]),
-                         float(low.iloc[max(0,i-2)]))
-            if lo < new_sar:
-                trend[i] = -1
-                sar[i]   = prev_ep
-                ep[i]    = lo
-                af[i]    = af_step
-            else:
-                trend[i] = 1
-                sar[i]   = new_sar
-                if hi > prev_ep:
-                    ep[i] = hi
-                    af[i] = min(prev_af + af_step, af_max)
-                else:
-                    ep[i] = prev_ep
-                    af[i] = prev_af
-        else:
-            new_sar = prev_sar + prev_af * (prev_ep - prev_sar)
-            new_sar = max(new_sar, float(high.iloc[i-1]),
-                         float(high.iloc[max(0,i-2)]))
-            if hi > new_sar:
-                trend[i] = 1
-                sar[i]   = prev_ep
-                ep[i]    = hi
-                af[i]    = af_step
-            else:
-                trend[i] = -1
-                sar[i]   = new_sar
-                if lo < prev_ep:
-                    ep[i] = lo
-                    af[i] = min(prev_af + af_step, af_max)
-                else:
-                    ep[i] = prev_ep
-                    af[i] = prev_af
-
-    return pd.Series(sar, index=high.index, name="PSAR"), pd.Series(trend, index=high.index, name="PSAR_trend")
-
-def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal_p: int = 9):
-    e_fast   = ema(series, fast)
-    e_slow   = ema(series, slow)
-    macd_l   = e_fast - e_slow
-    signal_l = ema(macd_l, signal_p)
-    hist     = macd_l - signal_l
-    return macd_l, signal_l, hist
-
-def bollinger_bands(series: pd.Series, period: int = 20, std_mult: float = 2.0):
-    mid  = sma(series, period)
-    std  = series.rolling(period).std()
-    return mid + std_mult*std, mid, mid - std_mult*std
-
-def volume_ma(volume: pd.Series, period: int = 20) -> pd.Series:
-    return volume.rolling(period).mean()
-
-def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low  - close.shift(1)).abs()
-    tr  = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    return tr.rolling(period).mean()
-
-
-# ─── Ichimoku ─────────────────────────────────────────────────────────────────
-
-def ichimoku(high: pd.Series, low: pd.Series, close: pd.Series,
-             t: int = 9, k: int = 26, s: int = 52, d: int = 26):
-    # Tenkan-sen (Conversion Line)
-    tenkan  = (high.rolling(t).max() + low.rolling(t).min()) / 2
-    # Kijun-sen (Base Line)
-    kijun   = (high.rolling(k).max() + low.rolling(k).min()) / 2
-    # Senkou Span A (Leading Span A) — shifted forward
-    span_a  = ((tenkan + kijun) / 2).shift(d)
-    # Senkou Span B (Leading Span B) — shifted forward
-    span_b  = ((high.rolling(s).max() + low.rolling(s).min()) / 2).shift(d)
-    # Chikou Span (Lagging Span) — shifted back
-    chikou  = close.shift(-d)
-    # Cloud thickness (volatility proxy)
-    cloud_thick = (span_a - span_b).abs()
-    return tenkan, kijun, span_a, span_b, chikou, cloud_thick
-
-
-# ─── Candlestick patterns ─────────────────────────────────────────────────────
-
-def detect_engulfing(open_: pd.Series, close: pd.Series) -> pd.Series:
-    # Bullish engulfing: prev candle bearish, current candle bullish and body fully engulfs prev
-    # Returns: +1 bullish, -1 bearish, 0 none
-    prev_bear  = close.shift(1) < open_.shift(1)
-    curr_bull  = close > open_
-    bull_eng   = (prev_bear & curr_bull &
-                  (open_ <= close.shift(1)) & (close >= open_.shift(1)))
-
-    prev_bull  = close.shift(1) > open_.shift(1)
-    curr_bear  = close < open_
-    bear_eng   = (prev_bull & curr_bear &
-                  (open_ >= close.shift(1)) & (close <= open_.shift(1)))
-
-    signal = pd.Series(0, index=close.index)
-    signal[bull_eng] =  1
-    signal[bear_eng] = -1
-    return signal
-
-
-def detect_3candle_sniper(open_: pd.Series, close: pd.Series,
-                           high: pd.Series, low: pd.Series) -> pd.Series:
-    # 3-Candle Sniper: 2-3 small candles same direction, then reversal candle
-    # that closes past the open of the first small candle
-    # Returns: +1 bullish reversal, -1 bearish reversal, 0 none
-
-    body     = (close - open_).abs()
-    avg_body = body.rolling(20).mean()
-    small    = body < avg_body * 0.7    # "smallish relative size"
-
-    signal = pd.Series(0, index=close.index)
-
-    for i in range(3, len(close)):
-        c1 = close.iloc[i-3]; o1 = open_.iloc[i-3]
-        c2 = close.iloc[i-2]; o2 = open_.iloc[i-2]
-        c3 = close.iloc[i-1]; o3 = open_.iloc[i-1]
-        c4 = close.iloc[i];   o4 = open_.iloc[i]
-
-        s1 = small.iloc[i-3]; s2 = small.iloc[i-2]; s3 = small.iloc[i-1]
-
-        # 3 bearish small candles → bullish sniper
-        if (c1 < o1 and c2 < o2 and c3 < o3 and
-                s1 and s2 and s3 and
-                c4 > o4 and  # reversal candle is bullish
-                c4 > o1):    # closes past the open of first candle
-            signal.iloc[i] = 1
-
-        # 3 bullish small candles → bearish sniper
-        elif (c1 > o1 and c2 > o2 and c3 > o3 and
-              s1 and s2 and s3 and
-              c4 < o4 and   # reversal candle is bearish
-              c4 < o1):     # closes past the open of first candle
-            signal.iloc[i] = -1
-
-    return signal
-
-
-def detect_doji(open_: pd.Series, close: pd.Series, high: pd.Series, low: pd.Series) -> pd.Series:
-    body  = (close - open_).abs()
-    range_ = high - low
-    # doji: body < 10% of total range
-    is_doji = (body / range_.replace(0, np.nan)) < 0.1
-    return is_doji.astype(int)
-
-
-def detect_hammer(open_: pd.Series, close: pd.Series,
-                  high: pd.Series, low: pd.Series) -> pd.Series:
-    body        = (close - open_).abs()
-    lower_wick  = pd.DataFrame({"o": open_, "c": close}).min(axis=1) - low
-    upper_wick  = high - pd.DataFrame({"o": open_, "c": close}).max(axis=1)
-    range_      = high - low
-    # hammer: lower wick ≥ 2× body, upper wick small
-    hammer      = ((lower_wick >= 2 * body) &
-                   (upper_wick < body * 0.3) &
-                   (range_ > 0))
-    return hammer.astype(int)
-
-
-# ─── RSI divergence ───────────────────────────────────────────────────────────
-
-def detect_rsi_divergence(close: pd.Series, rsi_: pd.Series,
-                           lookback: int = 14) -> pd.Series:
-    # Bearish: price makes higher high, RSI makes lower high → -1
-    # Bullish: price makes lower low,  RSI makes higher low  → +1
-    signal = pd.Series(0, index=close.index)
-    for i in range(lookback, len(close)):
-        w_close = close.iloc[i-lookback:i+1]
-        w_rsi   = rsi_.iloc[i-lookback:i+1]
-        if w_close.iloc[-1] == w_close.max() and w_rsi.iloc[-1] < w_rsi.max():
-            signal.iloc[i] = -1   # bearish divergence
-        if w_close.iloc[-1] == w_close.min() and w_rsi.iloc[-1] > w_rsi.min():
-            signal.iloc[i] =  1   # bullish divergence
-    return signal
-
-
-# ─── Your Mark rulebook signals ───────────────────────────────────────────────
-
-@dataclass
-class MarkISignal:
-    # PSAR + SMA50 + RSI8
-    direction:    int    # +1 long, -1 short, 0 flat
-    reason:       str
-    psar_flipped: bool
-    rsi_cross_50: bool
-    rsi_extreme:  bool   # RSI > 70 or < 30
-    candle_match: bool   # prev candle matches new psar colour
-    sma_distance: float  # % distance of close from SMA50
-
-
-@dataclass
-class MarkIISignal:
-    # Ichimoku + WPR + Volume
-    direction:      int
-    reason:         str
-    cloud_breakout: bool
-    wpr_extreme:    bool    # WPR in [-20,0] or [-100,-80]
-    cl_bl_cross:    bool    # Tenkan/Kijun intersection
-    chikou_clear:   bool    # Lagging span in open space
-    cloud_thick:    float   # thickness relative to price
-    volume_confirm: bool
-
-
-@dataclass
-class ICHCCISignal:
-    # Your notebook: ICH+CCI v1.0 — the clean combined system
-    direction:      int
-    reason:         str
-    cloud_breakout: bool
-    cci_extreme:    bool    # CCI crossed ±100
-    cci_cross_dir:  int     # +1 crossed above -100 (bullish), -1 crossed below +100 (bearish)
-    cl_bl_intersect:bool
-    chikou_trend:   int     # +1 above price = bullish, -1 below = bearish
-    cloud_thick:    float
-    synergetic:     bool    # all signals agree
-
-
-@dataclass
-class MarkIVSignal:
-    # EMA ribbon 21/50/100 + RSI divergence
-    direction:     int
-    reason:        str
-    ema21_side:    int    # price above (+1) or below (-1) EMA21
-    rsi_divergence: int   # +1 bull div, -1 bear div, 0 none
-    near_ema21:    bool   # price within 0.3% of EMA21
-    rrr_ok:        bool   # implied RR ≥ 1.5
-
-
-def compute_mark_i(df: pd.DataFrame, af_step: float = 0.04) -> pd.Series:
-    close  = df["Close"]
-    high   = df["High"]
-    low    = df["Low"]
-    open_  = df["Open"]
-
-    sma50     = sma(close, 50)
-    rsi8      = rsi(close, 8)
-    psar, psar_trend = parabolic_sar(high, low, af_step=af_step)
-
-    signals = pd.Series(0, index=df.index)
-    reasons = pd.Series("", index=df.index)
-
-    for i in range(3, len(df)):
-        c = float(close.iloc[i])
-        s = float(sma50.iloc[i]) if not pd.isna(sma50.iloc[i]) else c
-        r = float(rsi8.iloc[i])  if not pd.isna(rsi8.iloc[i])  else 50
-        pt_cur  = int(psar_trend.iloc[i])
-        pt_prev = int(psar_trend.iloc[i-1])
-
-        psar_flip = (pt_cur != pt_prev)
-        rsi_above = r > 50
-        rsi_ext   = r > 70 or r < 30
-        rsi_cross = (rsi8.iloc[i] > 50 and rsi8.iloc[i-1] <= 50) or \
-                    (rsi8.iloc[i] < 50 and rsi8.iloc[i-1] >= 50)
-
-        # candlestick match rule: prev candle colour matches new PSAR direction
-        prev_bull = float(close.iloc[i-1]) > float(open_.iloc[i-1])
-        prev_bear = float(close.iloc[i-1]) < float(open_.iloc[i-1])
-        candle_match = (pt_cur == 1 and prev_bull) or (pt_cur == -1 and prev_bear)
-
-        # avoid doji/hammer at reversal
-        d = detect_doji(open_, close, high, low)
-        h = detect_hammer(open_, close, high, low)
-        avoid = bool(d.iloc[i-1]) or bool(h.iloc[i-1])
-
-        if psar_flip and rsi_ext and candle_match and not avoid:
-            if pt_cur == 1 and c > s:  # uptrend, psar flipped bullish
-                signals.iloc[i] = 1
-                reasons.iloc[i] = "Mark I: PSAR flip ↑ + RSI extreme + candle match + above SMA50"
-            elif pt_cur == -1 and c < s:
-                signals.iloc[i] = -1
-                reasons.iloc[i] = "Mark I: PSAR flip ↓ + RSI extreme + candle match + below SMA50"
-
-    return signals, reasons
-
-
-def compute_ich_cci(df: pd.DataFrame) -> pd.Series:
-    close = df["Close"]
-    high  = df["High"]
-    low   = df["Low"]
-
-    tenkan, kijun, span_a, span_b, chikou, cloud_thick = ichimoku(high, low, close)
-    cci_   = cci(high, low, close, 14)
-
-    signals = pd.Series(0, index=df.index)
-    reasons = pd.Series("", index=df.index)
-
-    for i in range(52, len(df)):
-        c   = float(close.iloc[i])
-        sa  = float(span_a.iloc[i]) if not pd.isna(span_a.iloc[i]) else c
-        sb  = float(span_b.iloc[i]) if not pd.isna(span_b.iloc[i]) else c
-        tk  = float(tenkan.iloc[i]) if not pd.isna(tenkan.iloc[i]) else c
-        kj  = float(kijun.iloc[i])  if not pd.isna(kijun.iloc[i])  else c
-        ck  = float(chikou.iloc[i-26]) if i >= 26 and not pd.isna(chikou.iloc[i-26]) else c
-        ct  = float(cloud_thick.iloc[i]) if not pd.isna(cloud_thick.iloc[i]) else 0
-        cc  = float(cci_.iloc[i])  if not pd.isna(cci_.iloc[i])  else 0
-        cc1 = float(cci_.iloc[i-1]) if not pd.isna(cci_.iloc[i-1]) else 0
-
-        cloud_top    = max(sa, sb)
-        cloud_bot    = min(sa, sb)
-        cloud_width  = cloud_top - cloud_bot
-        avg_price    = c
-        thick_ratio  = cloud_width / avg_price if avg_price > 0 else 0
-        thin_cloud   = thick_ratio < 0.005   # < 0.5% of price = thin = uncertain
-
-        # cloud breakout
-        prev_c   = float(close.iloc[i-1])
-        in_cloud = cloud_bot <= prev_c <= cloud_top
-        bull_bo  = prev_c <= cloud_bot and c > cloud_top   # bullish BO
-        bear_bo  = prev_c >= cloud_top and c < cloud_bot   # bearish BO
-        # also standard: was in cloud, now out
-        if not (bull_bo or bear_bo):
-            bull_bo = (cloud_bot <= prev_c <= cloud_top) and (c > cloud_top)
-            bear_bo = (cloud_bot <= prev_c <= cloud_top) and (c < cloud_bot)
-
-        # CCI ±100 crossings
-        cci_bull = cc1 < -100 and cc >= -100   # crossed above -100 = bullish
-        cci_bear = cc1 >  100 and cc <=  100   # crossed below +100 = bearish
-        cci_ext  = abs(cc) > 100
-
-        # Tenkan/Kijun intersection
-        tk1  = float(tenkan.iloc[i-1]) if not pd.isna(tenkan.iloc[i-1]) else tk
-        kj1  = float(kijun.iloc[i-1])  if not pd.isna(kijun.iloc[i-1])  else kj
-        cl_bl_bull = (tk1 < kj1 and tk >= kj)
-        cl_bl_bear = (tk1 > kj1 and tk <= kj)
-
-        # Chikou above/below price → trend
-        chikou_bull = ck > c
-        chikou_bear = ck < c
-
-        if thin_cloud:
-            continue   # avoid — high uncertainty
-
-        # ICH breakout + CCI = strong entry (your notebook)
-        if bull_bo and (cci_bull or cci_ext and cc < 0) and chikou_bull:
-            synergy = cl_bl_bull or cci_bull
-            signals.iloc[i] = 1
-            reasons.iloc[i] = ("ICH+CCI: Cloud BO ↑ + CCI crossed -100 + Chikou bullish"
-                                + (" + TK/KJ cross" if cl_bl_bull else ""))
-
-        elif bear_bo and (cci_bear or cci_ext and cc > 0) and chikou_bear:
-            signals.iloc[i] = -1
-            reasons.iloc[i] = ("ICH+CCI: Cloud BO ↓ + CCI crossed +100 + Chikou bearish"
-                                + (" + TK/KJ cross" if cl_bl_bear else ""))
-
-    return signals, reasons
-
-
-def compute_mark_iv(df: pd.DataFrame) -> pd.Series:
-    close = df["Close"]
-    high  = df["High"]
-    low   = df["Low"]
-
-    e21  = ema(close, 21)
-    e50  = ema(close, 50)
-    e100 = ema(close, 100)
-    rsi_ = rsi(close, 14)
-    rsi_div = detect_rsi_divergence(close, rsi_)
-
-    signals = pd.Series(0, index=df.index)
-    reasons = pd.Series("", index=df.index)
-
-    for i in range(100, len(df)):
-        c   = float(close.iloc[i])
-        e21v = float(e21.iloc[i])  if not pd.isna(e21.iloc[i])  else c
-        e50v = float(e50.iloc[i])  if not pd.isna(e50.iloc[i])  else c
-        e100v= float(e100.iloc[i]) if not pd.isna(e100.iloc[i]) else c
-        div  = int(rsi_div.iloc[i])
-
-        above_e21  = c > e21v
-        above_e50  = c > e50v
-        above_e100 = c > e100v
-        near_e21   = abs(c - e21v) / e21v < 0.003  # within 0.3%
-
-        # RSI divergence near EMA21 = Mark IV entry
-        if div == 1 and near_e21 and above_e21:
-            signals.iloc[i] = 1
-            reasons.iloc[i] = "Mark IV: Bullish RSI divergence near EMA21"
-        elif div == -1 and near_e21 and not above_e21:
-            signals.iloc[i] = -1
-            reasons.iloc[i] = "Mark IV: Bearish RSI divergence near EMA21"
-
-    return signals, reasons
-
-
-def compute_3candle_sniper(df: pd.DataFrame) -> pd.Series:
-    sig = detect_3candle_sniper(df["Open"], df["Close"], df["High"], df["Low"])
-    reasons = sig.map({1: "3-Candle Sniper: Bullish reversal", -1: "3-Candle Sniper: Bearish reversal", 0: ""})
-    return sig, reasons
-
-
-def compute_engulfing(df: pd.DataFrame) -> pd.Series:
-    sig = detect_engulfing(df["Open"], df["Close"])
-    reasons = sig.map({1: "Engulfing: Bullish", -1: "Engulfing: Bearish", 0: ""})
-    return sig, reasons
-
-
-# ─── Composite signal ─────────────────────────────────────────────────────────
-
-def compute_all_signals(df: pd.DataFrame) -> pd.DataFrame:
-    if len(df) < 60:
+    raw.columns = [str(c).strip() for c in raw.columns]
+
+    # normalise column names
+    rename = {}
+    for c in raw.columns:
+        cl = c.lower()
+        if   "open"  in cl: rename[c] = "Open"
+        elif "high"  in cl: rename[c] = "High"
+        elif "low"   in cl: rename[c] = "Low"
+        elif "close" in cl: rename[c] = "Close"
+        elif "vol"   in cl: rename[c] = "Volume"
+    raw = raw.rename(columns=rename)
+
+    needed = ["Open", "High", "Low", "Close"]
+    if not all(c in raw.columns for c in needed):
         return pd.DataFrame()
 
-    mark1,  r1  = compute_mark_i(df)
-    ich_cci, r2 = compute_ich_cci(df)
-    mark4,  r3  = compute_mark_iv(df)
-    sniper, r4  = compute_3candle_sniper(df)
-    engulf, r5  = compute_engulfing(df)
+    if "Volume" not in raw.columns:
+        raw["Volume"] = 0
 
-    # composite: any signal fires
-    composite = pd.Series(0, index=df.index)
-    all_signals = pd.concat([mark1, ich_cci, mark4, sniper, engulf], axis=1)
-    all_signals.columns = ["mark1","ich_cci","mark4","sniper","engulf"]
+    # drop NaN rows
+    raw = raw.dropna(subset=needed)
 
-    # weighted vote: ICH+CCI and Mark I weighted higher
-    composite = (all_signals["mark1"]   * 2 +
-                 all_signals["ich_cci"] * 2 +
-                 all_signals["mark4"]   * 1 +
-                 all_signals["sniper"]  * 1 +
-                 all_signals["engulf"]  * 1)
+    # drop zero-price rows (gaps yfinance sometimes inserts)
+    raw = raw[(raw["Open"] > 0) & (raw["Close"] > 0)]
 
-    signal_out = pd.DataFrame({
-        "mark1":    mark1,
-        "ich_cci":  ich_cci,
-        "mark4":    mark4,
-        "sniper":   sniper,
-        "engulf":   engulf,
-        "composite":composite,
-        "reason_mark1":   r1,
-        "reason_ich_cci": r2,
-        "reason_mark4":   r3,
-        "reason_sniper":  r4,
-        "reason_engulf":  r5,
-    })
-
-    return signal_out
+    return raw
 
 
-# ─── TP/SL calculator ─────────────────────────────────────────────────────────
+# ── core indicators ────────────────────────────────────────────────────────────
 
-def calculate_tp_sl(entry: float, direction: int,
-                    atr_val: float, rrr: float = 2.0,
-                    sl_mult: float = 1.5) -> dict:
-    sl_dist = atr_val * sl_mult
-    tp_dist = sl_dist * rrr
+def sma(s, n):   return s.rolling(n).mean()
+def ema(s, n):   return s.ewm(span=n, adjust=False).mean()
+def wma(s, n):
+    w = np.arange(1, n+1)
+    return s.rolling(n).apply(lambda x: np.dot(x, w)/w.sum(), raw=True)
 
-    if direction == 1:   # long
-        sl = entry - sl_dist
-        tp = entry + tp_dist
-    else:                # short
-        sl = entry + sl_dist
-        tp = entry - tp_dist
+def rsi(s, n=14):
+    d = s.diff()
+    g = d.clip(lower=0).ewm(alpha=1/n, adjust=False).mean()
+    l = (-d.clip(upper=0)).ewm(alpha=1/n, adjust=False).mean()
+    return 100 - 100/(1 + g/l.replace(0, np.nan))
 
-    return {
-        "entry":    round(entry, 5),
-        "sl":       round(sl, 5),
-        "tp":       round(tp, 5),
-        "sl_pips":  round(sl_dist, 5),
-        "tp_pips":  round(tp_dist, 5),
-        "rrr":      rrr,
-        "direction":"LONG" if direction == 1 else "SHORT",
-    }
+def cci(h, l, c, n=20):
+    tp  = (h+l+c)/3
+    m   = tp.rolling(n).mean()
+    md  = tp.rolling(n).apply(lambda x: np.mean(np.abs(x-x.mean())), raw=True)
+    return (tp-m)/(0.015*md.replace(0, np.nan))
 
+def williams_r(h, l, c, n=14):
+    hh = h.rolling(n).max()
+    ll = l.rolling(n).min()
+    return -100*(hh-c)/(hh-ll).replace(0, np.nan)
 
-# ─── Backtest ─────────────────────────────────────────────────────────────────
+def stochastic(h, l, c, k=14, d=3):
+    ll = l.rolling(k).min()
+    hh = h.rolling(k).max()
+    k_ = 100*(c-ll)/(hh-ll).replace(0, np.nan)
+    d_ = k_.rolling(d).mean()
+    return k_, d_
 
-def backtest_signals(df: pd.DataFrame, signals: pd.DataFrame,
-                     signal_col: str = "composite",
-                     atr_mult_sl: float = 1.5, rrr: float = 2.0) -> dict:
-    close   = df["Close"]
-    high    = df["High"]
-    low     = df["Low"]
-    atr_    = atr(high, low, close, 14)
-    sig     = signals[signal_col]
+def macd(s, fast=12, slow=26, sig=9):
+    m = ema(s, fast) - ema(s, slow)
+    signal = ema(m, sig)
+    return m, signal, m-signal
 
-    trades  = []
-    in_trade = False
+def bollinger(s, n=20, std=2.0):
+    m = sma(s, n)
+    sd = s.rolling(n).std()
+    return m+std*sd, m, m-std*sd
 
-    for i in range(1, len(sig)):
-        s = int(np.sign(sig.iloc[i]))
-        if s == 0 or in_trade:
-            continue
+def atr(h, l, c, n=14):
+    tr = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
+    return tr.ewm(alpha=1/n, adjust=False).mean()
 
-        entry   = float(close.iloc[i])
-        atr_val = float(atr_.iloc[i]) if not pd.isna(atr_.iloc[i]) else entry * 0.001
-        tpsl    = calculate_tp_sl(entry, s, atr_val, rrr, atr_mult_sl)
+def vwap(h, l, c, vol):
+    tp = (h+l+c)/3
+    return (tp*vol).cumsum() / vol.cumsum().replace(0, np.nan)
 
-        # simulate: scan forward for TP or SL hit
-        result  = None
-        for j in range(i+1, min(i+50, len(df))):
-            hi = float(high.iloc[j])
-            lo = float(low.iloc[j])
-            if s == 1:
-                if lo <= tpsl["sl"]:  result = "SL"; break
-                if hi >= tpsl["tp"]:  result = "TP"; break
+def supertrend(h, l, c, n=10, mult=3.0):
+    a = atr(h, l, c, n)
+    hl2 = (h+l)/2
+    upper = hl2 + mult*a
+    lower = hl2 - mult*a
+    st  = pd.Series(np.nan, index=c.index)
+    dir_ = pd.Series(1, index=c.index)
+    for i in range(1, len(c)):
+        prev_upper = upper.iloc[i-1]
+        prev_lower = lower.iloc[i-1]
+        upper.iloc[i] = upper.iloc[i] if upper.iloc[i] < prev_upper or c.iloc[i-1] > prev_upper else prev_upper
+        lower.iloc[i] = lower.iloc[i] if lower.iloc[i] > prev_lower or c.iloc[i-1] < prev_lower else prev_lower
+        if dir_.iloc[i-1] == 1:
+            dir_.iloc[i] = -1 if c.iloc[i] < lower.iloc[i] else 1
+        else:
+            dir_.iloc[i] = 1 if c.iloc[i] > upper.iloc[i] else -1
+        st.iloc[i] = lower.iloc[i] if dir_.iloc[i] == 1 else upper.iloc[i]
+    return st, dir_
+
+def parabolic_sar(h, l, af_step=0.02, af_max=0.2):
+    n = len(h)
+    sar   = np.full(n, np.nan)
+    trend = np.ones(n)
+    ep    = np.zeros(n)
+    af    = np.full(n, af_step)
+    sar[0] = float(l.iloc[0]); ep[0] = float(h.iloc[0])
+    for i in range(1, n):
+        hi = float(h.iloc[i]); lo = float(l.iloc[i])
+        prev_s = sar[i-1]; prev_e = ep[i-1]; prev_a = af[i-1]; prev_t = trend[i-1]
+        if prev_t == 1:
+            new_s = prev_s + prev_a*(prev_e-prev_s)
+            new_s = min(new_s, float(l.iloc[i-1]), float(l.iloc[max(0,i-2)]))
+            if lo < new_s:
+                trend[i]=-1; sar[i]=prev_e; ep[i]=lo; af[i]=af_step
             else:
-                if hi >= tpsl["sl"]:  result = "SL"; break
-                if lo <= tpsl["tp"]:  result = "TP"; break
+                trend[i]=1; sar[i]=new_s
+                ep[i]=max(prev_e,hi); af[i]=min(prev_a+(af_step if hi>prev_e else 0), af_max)
+        else:
+            new_s = prev_s + prev_a*(prev_e-prev_s)
+            new_s = max(new_s, float(h.iloc[i-1]), float(h.iloc[max(0,i-2)]))
+            if hi > new_s:
+                trend[i]=1; sar[i]=prev_e; ep[i]=hi; af[i]=af_step
+            else:
+                trend[i]=-1; sar[i]=new_s
+                ep[i]=min(prev_e,lo); af[i]=min(prev_a+(af_step if lo<prev_e else 0), af_max)
+    return (pd.Series(sar, index=h.index),
+            pd.Series(trend, index=h.index))
 
-        if result is None:
-            result = "OPEN"
+def ichimoku(h, l, c, t=9, k=26, s=52, d=26):
+    tenkan = (h.rolling(t).max() + l.rolling(t).min())/2
+    kijun  = (h.rolling(k).max() + l.rolling(k).min())/2
+    span_a = ((tenkan+kijun)/2).shift(d)
+    span_b = ((h.rolling(s).max()+l.rolling(s).min())/2).shift(d)
+    chikou = c.shift(-d)
+    return tenkan, kijun, span_a, span_b, chikou
 
-        pnl = rrr if result == "TP" else (-1.0 if result == "SL" else 0)
-        trades.append({
-            "date":    str(df.index[i].date()),
-            "signal":  signal_col,
-            "direction": tpsl["direction"],
-            "entry":   entry,
-            "tp":      tpsl["tp"],
-            "sl":      tpsl["sl"],
-            "result":  result,
-            "pnl_r":   pnl,
-        })
+def mfi(h, l, c, vol, n=14):
+    tp  = (h+l+c)/3
+    rmf = tp*vol
+    pos = rmf.where(tp > tp.shift(1), 0)
+    neg = rmf.where(tp < tp.shift(1), 0)
+    mfr = pos.rolling(n).sum() / neg.rolling(n).sum().replace(0, np.nan)
+    return 100 - 100/(1+mfr)
 
-    if not trades:
-        return {"trades": [], "win_rate": 0, "total_r": 0, "sharpe": 0}
+def adx(h, l, c, n=14):
+    up   = h.diff()
+    down = -l.diff()
+    pdm  = up.where((up > down) & (up > 0), 0)
+    ndm  = down.where((down > up) & (down > 0), 0)
+    a    = atr(h, l, c, n)
+    pdi  = 100*pdm.ewm(alpha=1/n, adjust=False).mean()/a.replace(0, np.nan)
+    ndi  = 100*ndm.ewm(alpha=1/n, adjust=False).mean()/a.replace(0, np.nan)
+    dx   = 100*(pdi-ndi).abs()/(pdi+ndi).replace(0, np.nan)
+    return dx.ewm(alpha=1/n, adjust=False).mean(), pdi, ndi
 
-    trades_df  = pd.DataFrame(trades)
-    closed     = trades_df[trades_df["result"].isin(["TP","SL"])]
-    win_rate   = float((closed["pnl_r"] > 0).mean()) if len(closed) > 0 else 0
-    total_r    = float(closed["pnl_r"].sum())
-
-    pnl_series = closed["pnl_r"]
-    sharpe     = (float(pnl_series.mean()) /
-                  float(pnl_series.std()) * np.sqrt(252)) if pnl_series.std() > 0 else 0
-
+def fibonacci_levels(high_val: float, low_val: float) -> dict:
+    diff = high_val - low_val
     return {
-        "trades":   trades_df.to_dict("records"),
-        "win_rate": win_rate,
-        "total_r":  total_r,
-        "sharpe":   sharpe,
-        "n_trades": len(closed),
-        "n_wins":   int((closed["pnl_r"] > 0).sum()),
+        "0%":     high_val,
+        "23.6%":  high_val - 0.236*diff,
+        "38.2%":  high_val - 0.382*diff,
+        "50%":    high_val - 0.500*diff,
+        "61.8%":  high_val - 0.618*diff,
+        "78.6%":  high_val - 0.786*diff,
+        "100%":   low_val,
+        "127.2%": low_val  - 0.272*diff,
+        "161.8%": low_val  - 0.618*diff,
     }
+
+
+# ── candlestick patterns ───────────────────────────────────────────────────────
+
+def pattern_engulfing(o, c):
+    pb = c.shift(1) < o.shift(1)
+    cb = c > o
+    bull = pb & cb & (o <= c.shift(1)) & (c >= o.shift(1))
+    cb2  = c < o
+    pb2  = c.shift(1) > o.shift(1)
+    bear = pb2 & cb2 & (o >= c.shift(1)) & (c <= o.shift(1))
+    s = pd.Series(0, index=c.index)
+    s[bull] = 1; s[bear] = -1
+    return s
+
+def pattern_3candle_sniper(o, c, h, l):
+    body     = (c-o).abs()
+    avg_body = body.rolling(20).mean()
+    small    = body < avg_body*0.7
+    sig = pd.Series(0, index=c.index)
+    for i in range(3, len(c)):
+        c1,o1 = c.iloc[i-3],o.iloc[i-3]
+        c2,o2 = c.iloc[i-2],o.iloc[i-2]
+        c3,o3 = c.iloc[i-1],o.iloc[i-1]
+        c4,o4 = c.iloc[i],  o.iloc[i]
+        s1,s2,s3 = small.iloc[i-3],small.iloc[i-2],small.iloc[i-1]
+        if c1<o1 and c2<o2 and c3<o3 and s1 and s2 and s3 and c4>o4 and c4>o1:
+            sig.iloc[i] = 1
+        elif c1>o1 and c2>o2 and c3>o3 and s1 and s2 and s3 and c4<o4 and c4<o1:
+            sig.iloc[i] = -1
+    return sig
+
+def pattern_doji(o, c, h, l):
+    body  = (c-o).abs()
+    range_ = (h-l).replace(0, np.nan)
+    return ((body/range_) < 0.1).astype(int)
+
+def pattern_hammer(o, c, h, l):
+    body = (c-o).abs()
+    lo_  = pd.DataFrame({"o":o,"c":c}).min(axis=1)
+    hi_  = pd.DataFrame({"o":o,"c":c}).max(axis=1)
+    lw   = lo_ - l
+    uw   = h - hi_
+    return ((lw >= 2*body) & (uw < body*0.3) & ((h-l)>0)).astype(int)
+
+
+# ── ICH+CCI signal (your notebook) ────────────────────────────────────────────
+
+def compute_ich_cci_signal(df: pd.DataFrame) -> pd.Series:
+    c = df["Close"]; h = df["High"]; l = df["Low"]
+    tenkan, kijun, span_a, span_b, chikou = ichimoku(h, l, c)
+    cci_ = cci(h, l, c, 14)
+    sig  = pd.Series(0, index=df.index)
+    for i in range(52, len(df)):
+        sa = float(span_a.iloc[i]) if pd.notna(span_a.iloc[i]) else float(c.iloc[i])
+        sb = float(span_b.iloc[i]) if pd.notna(span_b.iloc[i]) else float(c.iloc[i])
+        cv = float(c.iloc[i]); cv1 = float(c.iloc[i-1])
+        cc = float(cci_.iloc[i]) if pd.notna(cci_.iloc[i]) else 0
+        cc1= float(cci_.iloc[i-1]) if pd.notna(cci_.iloc[i-1]) else 0
+        top = max(sa,sb); bot = min(sa,sb)
+        thick = (top-bot)/cv if cv>0 else 0
+        if thick < 0.005: continue  # thin cloud — skip
+        bull_bo = cv1 <= top and cv > top
+        bear_bo = cv1 >= bot and cv < bot
+        ck_idx = max(0, i-26)
+        ck = float(chikou.iloc[ck_idx]) if pd.notna(chikou.iloc[ck_idx]) else cv
+        chikou_bull = ck > cv; chikou_bear = ck < cv
+        cci_bull = cc1 < -100 and cc >= -100
+        cci_bear = cc1 > 100  and cc <=  100
+        if bull_bo and (cci_bull or cc < -100) and chikou_bull:
+            sig.iloc[i] = 1
+        elif bear_bo and (cci_bear or cc > 100) and chikou_bear:
+            sig.iloc[i] = -1
+    return sig
+
+
+def compute_mark1_signal(df: pd.DataFrame, af: float = 0.04) -> pd.Series:
+    c = df["Close"]; h = df["High"]; l = df["Low"]; o = df["Open"]
+    sma50 = sma(c, 50); rsi8 = rsi(c, 8)
+    psar_, ptrd = parabolic_sar(h, l, af_step=af)
+    doji_  = pattern_doji(o, c, h, l)
+    hammer_= pattern_hammer(o, c, h, l)
+    sig    = pd.Series(0, index=df.index)
+    for i in range(3, len(df)):
+        pt = int(ptrd.iloc[i]); pt1 = int(ptrd.iloc[i-1])
+        if pt == pt1: continue  # no flip
+        r = float(rsi8.iloc[i]) if pd.notna(rsi8.iloc[i]) else 50
+        rsi_ok = r > 70 or r < 30 or (rsi8.iloc[i] > 50) != (rsi8.iloc[i-1] > 50)
+        prev_bull = float(c.iloc[i-1]) > float(o.iloc[i-1])
+        candle_ok = (pt == 1 and prev_bull) or (pt == -1 and not prev_bull)
+        avoid = bool(doji_.iloc[i-1]) or bool(hammer_.iloc[i-1])
+        if rsi_ok and candle_ok and not avoid:
+            sig.iloc[i] = pt
+    return sig
+
+
+def backtest(df, signals, rrr=2.0, atr_mult=1.5):
+    c = df["Close"]; h = df["High"]; l = df["Low"]
+    a = atr(h, l, c, 14)
+    trades = []
+    for i in range(1, len(signals)):
+        s = int(np.sign(signals.iloc[i]))
+        if s == 0: continue
+        entry = float(c.iloc[i])
+        av    = float(a.iloc[i]) if pd.notna(a.iloc[i]) else entry*0.001
+        sl    = entry - av*atr_mult*s
+        tp    = entry + av*atr_mult*rrr*s
+        res   = "OPEN"; pnl = 0
+        for j in range(i+1, min(i+60, len(df))):
+            hi = float(h.iloc[j]); lo = float(l.iloc[j])
+            if s == 1:
+                if lo <= sl: res="SL"; pnl=-1; break
+                if hi >= tp: res="TP"; pnl=rrr; break
+            else:
+                if hi >= sl: res="SL"; pnl=-1; break
+                if lo <= tp: res="TP"; pnl=rrr; break
+        trades.append({"i":i,"dir":"L" if s==1 else "S","entry":entry,
+                        "tp":round(tp,5),"sl":round(sl,5),"result":res,"R":pnl})
+    return pd.DataFrame(trades) if trades else pd.DataFrame()
